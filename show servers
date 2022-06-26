@@ -1,0 +1,113 @@
+import openstack
+import sys
+
+def main(region):
+	openstack.enable_logging(debug=False)
+	"TODO: Find a way to make the code use a file instead of clouds.yaml"
+	create_list_of_servers(openstack.connect(cloud=region[1]))
+
+def find_longest_word(word_list):
+	list_of_words = []
+	for key in word_list:
+		server_list_of_words = []
+		for key2 in word_list[key]:
+			if word_list[key][key2] != "":
+				server_list_of_words.append(str(word_list[key][key2]))
+		longest_word = sorted(server_list_of_words, key=len)
+		list_of_words.append(longest_word[-1])
+	the_word = sorted(list_of_words, key=len)
+	return the_word[-1]
+
+def get_key2(dict):
+	keys=[]
+	for key in dict:
+		for key2 in dict[key]:
+			keys.append(key2)
+	keys = sorted(keys, key=len)
+	return keys[-1]
+
+def build_table(dict):
+	x = "|" + "-" * len(get_key2(dict)) + "|"
+	y = "-" * len(find_longest_word(dict)) + "|"
+	for key in dict:
+		print(x + y)
+		for key2 in dict[key]:
+			if dict[key][key2] != "" and str(dict[key][key2]) != "None":
+				print("|" + str(key2)
+				+  " " * (len(x) - len(key2) -2)
+				+ "| " 
+				+ str(dict[key][key2])
+				+ " " * (len(y) - len(str(dict[key][key2])) -2)
+				+ "|")	
+		print(x + y)
+
+def power_state(ps):
+	match ps:
+		case 1:
+			return "Running"
+		case 2:
+			return "?"
+		case 3: 
+			return "??"
+		case 4:
+			return "shutdown"
+		case _:
+			return "??? (" + ps + ")"
+
+def get_floating_ip(server, key):
+	if len(server.addresses[key]) == 2:
+		return server.addresses[key][1]["addr"]
+	else:
+		return ""
+
+def flavor_id(server, conn):
+	for flavor in conn.compute.flavors():
+		if flavor.name == server.flavor["original_name"]:  
+            		return str(flavor.id)
+
+def create_list_of_servers(conn):
+	list_of_servers=[]
+	for server in conn.compute.servers():
+		list_of_servers.append(server)
+	if len(list_of_servers) > 0:
+		servers = {}
+		for server in list_of_servers:
+			key, value = list(server.addresses.items())[0]
+			server_dict = {
+			#Admin only
+			"Compute_Host" : server.compute_host,
+			"Host_status" : server.host_status,
+			"Hostname" : server.hostname,
+			"Hypervisor_hostname" : server.hypervisor_hostname,
+			"kernel_id": server.kernel_id,
+			"root_device_name" : server.root_device_name,
+			#VM details
+			"Name(ID)" : server.name + "(" + server.id + ")",
+			"Availability_zone" : server.availability_zone,
+			"Power_state" : power_state(server.power_state),
+			"Task_state" : server.task_state,
+			"Vm_state" : server.vm_state,
+			"Created" : server.created_at,
+			"Flavor" : server.flavor["original_name"],
+			"Flavor_ID" :flavor_id(server, conn),
+			"Image_ID" : server.image["id"],
+			"Updated_at" : server.updated_at,
+			#Network details
+			"Network_name" : key,
+			"LocalIP" : server.addresses[key][0]["addr"],
+			"Floating_IP" : get_floating_ip(server, key),
+			"accessIPv4" : server.access_ipv4,
+			#Safety details
+			"Key-name" : server.key_name,
+			"Security-groups" : server.security_groups
+			}
+			servers[server.name] = server_dict
+		build_table(servers)
+	else:
+		print("No servers in the region")
+
+if __name__ == "__main__":
+	if len(sys.argv) > 1:
+		main(sys.argv)
+	else:
+		print("provide atleast one argument")
